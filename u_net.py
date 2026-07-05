@@ -4,12 +4,15 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageFile
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import random
-from sklearn.metrics import precision_score, recall_score, accuracy_score
+from sklearn.metrics import precision_score, recall_score, accuracy_score, f1_score, jaccard_score
+
+# Разрешаем Pillow загружать «битые» (truncated) изображения
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ---------- Модель U-Net ----------
 class DoubleConv(nn.Module):
@@ -140,13 +143,9 @@ def compute_metrics(outputs, targets, threshold=0.5):
     # Pixel Accuracy
     acc = accuracy_score(targets_np, preds_np)
     
-    # Precision, Recall, F1 (Dice)
-    # Для бинарного случая
+    # Precision, Recall, F1 (Dice), IoU
     prec = precision_score(targets_np, preds_np, zero_division=0)
     rec = recall_score(targets_np, preds_np, zero_division=0)
-    
-    # Dice (F1) и IoU через sklearn
-    from sklearn.metrics import f1_score, jaccard_score
     f1 = f1_score(targets_np, preds_np, zero_division=0)
     iou = jaccard_score(targets_np, preds_np, zero_division=0)
     
@@ -165,7 +164,7 @@ def train(model, train_loader, val_loader, epochs, device, save_path='unet_best.
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
-    best_iou = 0.0  # переменная для отслеживания наилучшего IoU
+    best_iou = 0.0
     history = {'train_loss': [], 'val_loss': [], 'val_iou': [], 'val_dice': []}
 
     for epoch in range(epochs):
@@ -250,7 +249,8 @@ def train(model, train_loader, val_loader, epochs, device, save_path='unet_best.
     plt.ylabel('Score')
     plt.legend()
     plt.subplot(2, 2, 3)
-    plt.plot(epochs_range, [lr for lr in history.get('lr', [])])  # если захотим сохранять lr
+    # Если захотим сохранять lr, раскомментируйте:
+    # plt.plot(epochs_range, [lr for lr in history.get('lr', [])])
     plt.tight_layout()
     plt.savefig('training_curves.png')
     plt.show()
@@ -259,8 +259,8 @@ def train(model, train_loader, val_loader, epochs, device, save_path='unet_best.
 
 # ---------- Запуск ----------
 if __name__ == '__main__':
-    IMG_DIR = 'C:/Users/User/Desktop/hak/training_sigment/картинки'
-    MASK_DIR = 'C:/Users/User/Desktop/hak/training_sigment/маски'
+    IMG_DIR = '/home/team056/training_sigment/картинки'
+    MASK_DIR = '/home/team056/training_sigment/маски'
 
     BATCH_SIZE = 4
     EPOCHS = 30
